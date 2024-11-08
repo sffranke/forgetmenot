@@ -1,6 +1,6 @@
 # forgetmenot
 
-It is a toy that does something at the touch of a button, in this case pi plays a mini organ, a music box.
+It is a toy that does something at the touch of a button, in this case a Raspberry Pi Pico plays a mini organ, a music box.
 
 The toy has at least 1 sibling toy.  When started, it connects to an IRC channel. When the play button is pressed, the music box plays and passes this status on to the IRC channel. The sibling toys, which can be located anywhere in the world, ‘see’ the status and also play in response.  You know that someone is thinking of you at that moment :-)  
 
