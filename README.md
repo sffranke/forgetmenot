@@ -17,6 +17,7 @@ Hardware:
 - DRV8833 1.5A 2-channel DC motor drive board https://amzn.to/40EvkKF
 - AMS1117 3.3V power supply module https://amzn.to/4hHLWra
 - Micro USB Buchse zu DIP Adapterplatine https://amzn.to/3YXfN7t
+
 *Note: The links are affiliate links. If you make a purchase, I will receive a small commission without the price changing for you.*
 
 In this Documentaion I use old Pi Picos without built in WiFi just because I have some of them left.  
