@@ -6,9 +6,10 @@ The toy has at least 1 sibling toy.  When started, it connects to an IRC channel
 
 When starting for the first time, or if the previous WiFi is no longer available, the toy opens a ‘Pico’ hotspot. You connect to the hotspot and enter your WiFi access data. This data is used to connect to the Internet on subsequent starts.
 
-Hardware:  
+Hardware:
+*Hinweis: Bei den Links handelt es sich um Affiliate-Links. Bei einem Kauf erhalte ich eine kleine Provision, ohne dass sich der Preis für Sie ändert.*
 - Mini barrel organ  
-- Pi Pico  
+- Pi Pico  https://amzn.to/3ClQl2D
 - L298N Motor Drive Controller Board  
 - Motor 60 rpm or faster  
 - ESP8266-01 Wi-Fi Module (or new Pi Pico W)
@@ -17,13 +18,10 @@ Hardware:
 - Micro USB Buchse zu DIP Adapterplatine
 
 
-
 In this Documentaion I use old Pi Picos without built in WiFi just because I have some of them left.  
 
 Improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
 - Play a beep when ready
 - Implement a visial play using LED, for example
-  
-
   
