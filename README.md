@@ -23,6 +23,8 @@ Hardware:
 In this Documentaion I use old Pi Picos without built in WiFi just because I have some of them left.  
 The code is for the Pi Pico without built in WiFi, it needs some changes if you use the Pi Pico with built in WiFi (Pico W)!
 
+Wirering diagram follows soon!  
+
 Improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
 - Play a beep when ready
