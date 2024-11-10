@@ -4,7 +4,7 @@ It is a toy that does something at the touch of a button, in this case a Raspber
 
 The toy has at least 1 sibling toy.  When started, it connects to an IRC channel. When the play button is pressed, the music box plays and passes this status on to the IRC channel. The sibling toys, which can be located anywhere in the world, ‘see’ the status and also play in response.  You know that someone is thinking of you at that moment :-)  
 
-When starting for the first time, or if the previous WiFi is no longer available, the toy opens a ‘Pico’ hotspot. You connect to the hotspot and enter your WiFi access data. This data is used to connect to the Internet on subsequent starts.
+When starting for the first time, or if the previous WiFi is no longer available, the toy opens a ‘Pico’ hotspot. You connect to the hotspot 192.168.4.1 and enter your WiFi access data. This data is used to connect to the Internet on subsequent starts.
 
 Hardware:
 - Mini barrel organ https://amzn.to/40GhTKe
