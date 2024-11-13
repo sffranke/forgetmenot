@@ -5,36 +5,39 @@ import binascii
 import sys
 
 # Wi-Fi and IRC initialization
-irc_channel = "#YOURCHANNEL"
-irc_password = "YORCHANNELPASSWORD"
-motorspeed = 0.0975 # *strange but I use a 1.5 V motor at 5 V supply
+irc_channel = "#forgetmenot"
+irc_password = "tdtgo.im"
+motorspeed = 0.0972
 
 class Motor:
-    def __init__(self, in1_pin=14, in2_pin=15, pwm_freq=10):  # PWM-Freq * strange but I use a 1.5 V motor at 5 V supply
-        # Setup für PWM auf den Eingängen IN1 und IN2
-        self.in1 = PWM(Pin(in1_pin))
-        self.in2 = PWM(Pin(in2_pin))
-        self.in1.freq(pwm_freq)
-        self.in2.freq(pwm_freq)
-        
+    def __init__(self, in1_pin=14, in2_pin=15, pwm_freq=10):
+        self.in1_pin = in1_pin
+        self.in2_pin = in2_pin
+        self.pwm_freq = pwm_freq
+        self.setup_pwm()
         self.is_running = False
         self.start_time = None
-    
+
+    def setup_pwm(self):
+        # PWM-Instanzen einrichten
+        self.in1 = PWM(Pin(self.in1_pin))
+        self.in2 = PWM(Pin(self.in2_pin))
+        self.in1.freq(self.pwm_freq)
+        self.in2.freq(self.pwm_freq)
+
     def forward(self, speed):
         if not self.is_running:
             print("Motor läuft vorwärts")
             pwm_value = min(max(int(65535 * speed), 0), 65535)
-            self.in1.duty_u16(pwm_value)   # Setze PWM für Geschwindigkeit auf IN1
-            self.in2.duty_u16(0)           # Setze IN2 auf 0 für Vorwärtsbewegung
-            print(f"PWM-Wert für IN1 gesetzt auf: {pwm_value} (Speed: {speed})")
+            self.in1.duty_u16(pwm_value)
+            self.in2.duty_u16(0)
             self.is_running = True
             self.start_time = utime.ticks_ms()
 
     def stop(self):
         if self.is_running:
             print("Motor gestoppt")
-            # Stoppt den Motor, indem beide Pins auf 0 gesetzt werden
-            self.in1.duty_u16(0)
+            self.in1.duty_u16(0)  # Setze Duty Cycle auf 0 statt PWM zu deinitialisieren
             self.in2.duty_u16(0)
             self.is_running = False
             self.start_time = None
@@ -51,11 +54,9 @@ class WiFiIRCClientESP01S:
     def __init__(self, uart_id, rx_pin, tx_pin, baudrate=115200):
         self.uart = UART(uart_id, rx=Pin(rx_pin), tx=Pin(tx_pin), baudrate=baudrate)
         self.flush_uart_buffer()
-
     def flush_uart_buffer(self):
         while self.uart.any():
             self.uart.read(self.uart.any())
-
     def read_response(self, expected, timeout=3000):
         start_time = utime.ticks_ms()
         buffer = ''
@@ -65,14 +66,12 @@ class WiFiIRCClientESP01S:
                 if expected in buffer:
                     return buffer
         return buffer
-
     def send_command(self, cmd, expected_response='OK', timeout=9000):
         self.flush_uart_buffer()
         self.uart.write((cmd + '\r\n').encode('utf-8'))
         response = self.read_response(expected_response, timeout)
         print(f"Response to '{cmd}': {response.strip()}")
         return response
-
     def send_tcp_data(self, data):
         length = len(data)
         self.flush_uart_buffer()
@@ -86,7 +85,6 @@ class WiFiIRCClientESP01S:
             return False
         print("Data sent successfully.")
         return True
-
     def connect_to_wifi(self, ssid, password):
         self.send_command('ATE0')
         if 'OK' not in self.send_command('AT', timeout=2000):
@@ -101,7 +99,6 @@ class WiFiIRCClientESP01S:
         print("Connected to Wi-Fi.")
         utime.sleep(2)
         return True
-
     def connect_to_irc(self, server, port, irc_nick):
         self.send_command('AT+CIPCLOSE', timeout=5000)
         utime.sleep(0.5)
@@ -120,14 +117,12 @@ class WiFiIRCClientESP01S:
                 print("Failed to send IRC commands.")
         else:
             print("Failed to connect to IRC server.")
-
     def handle_server_messages(self):
         global motorspeed
         while True:
             if self.uart.any():
                 data = self.uart.read(self.uart.any()).decode('utf-8')
                 print("Empfangene Daten:", data)
-
                 if 'PRIVMSG' in data:
                     if ':play' in data:
                         print("play")
@@ -135,13 +130,11 @@ class WiFiIRCClientESP01S:
                     elif ':stop' in data:
                         print("stop")
                         motor.stop()
-
                 if "PING :" in data:
                     server_id = data.split("PING :", 1)[1].strip()
                     pong_command = f"PONG :{server_id}\r\n"
                     print("Sende PONG:", pong_command)
                     self.send_tcp_data(pong_command)
-
             if not button.value():
                 if motor.is_running:
                     print("Taster gedrückt, Motor wird gestoppt")
@@ -152,10 +145,8 @@ class WiFiIRCClientESP01S:
                     motor.forward(motorspeed)
                     self.send_tcp_data(f"PRIVMSG {irc_channel} :play\r\n")
                 utime.sleep(0.5)
-
             motor.check_and_stop()
             utime.sleep(0.05)
-
     def start_hotspot(self):
         self.send_command('ATE0')
         self.send_command('AT+CWMODE=2')
@@ -163,14 +154,12 @@ class WiFiIRCClientESP01S:
         self.send_command('AT+CWSAP="PicoSetup","",1,0')
         self.send_command('AT+CIPMUX=1')
         self.send_command('AT+CIPSERVER=1,80')
-
     def serve_page(self):
         while True:
             if self.uart.any():
                 data = self.uart.read(self.uart.any()).decode('utf-8')
                 self.process_request(data)
             utime.sleep(0.1)
-
     def process_request(self, data):
         print("Vollständige Anfrage empfangen.")
         if '+IPD' in data:
@@ -179,11 +168,9 @@ class WiFiIRCClientESP01S:
                 start = ipd_index + 5
                 comma_index = data.find(',', start)
                 channel = data[start:comma_index].strip()
-
                 colon_index = data.find(':', comma_index)
                 http_request = data[colon_index+1:]
                 request_line = http_request.split('\r\n')[0]
-
                 if 'GET / ' in request_line and '?' not in request_line:
                     html = """HTTP/1.1 200 OK\r
 Content-Type: text/html\r
@@ -256,7 +243,6 @@ Connection: close\r
     </div>
 </body>
 </html>
-
 """
                     self.send_data(channel, html)
                 elif 'GET /set?' in request_line:
@@ -313,7 +299,6 @@ Connection: close\r
     </div>
 </body>
 </html>
-
 """
                     self.send_data(channel, response)
                     self.send_command('AT+CIPSERVER=0')
@@ -321,7 +306,6 @@ Connection: close\r
                     sys.exit()
             except Exception as e:
                 print("Fehler beim Verarbeiten der Anfrage:", e)
-
     def send_data(self, channel, data):
         length = len(data)
         send_cmd = f'AT+CIPSEND={channel},{length}'
@@ -330,7 +314,6 @@ Connection: close\r
             if 'SEND OK' not in self.read_response('SEND OK', timeout=5000):
                 print("Fehler beim Senden der Daten.")
         self.send_command(f'AT+CIPCLOSE={channel}')
-
     def url_decode(self, s):
         res, i = '', 0
         while i < len(s):
@@ -343,11 +326,9 @@ Connection: close\r
                 res += s[i]
             i += 1
         return res
-
 # Global Instances
 button = Pin(17, Pin.IN, Pin.PULL_UP)
 motor = Motor(in1_pin=14, in2_pin=15)
-
 # Main Function
 def main():
     if 'credentials.txt' in os.listdir():
@@ -367,5 +348,4 @@ def main():
         wifi_setup = WiFiIRCClientESP01S(uart_id=0, rx_pin=1, tx_pin=0)
         wifi_setup.start_hotspot()
         wifi_setup.serve_page()
-
 main()
