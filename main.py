@@ -1,4 +1,3 @@
-
 import os 
 import utime
 from machine import Pin, UART, PWM
@@ -6,38 +5,42 @@ import binascii
 import sys
 
 # Wi-Fi and IRC initialization
-irc_channel = "#"
-irc_password = ""
+irc_channel = "#YOURCHANNEL"
+irc_password = "YORCHANNELPASSWORD"
+motorspeed = 0.0975 # *strange but I use a 1.5 V motor at 5 V supply
 
-# Motor Class
 class Motor:
-    def __init__(self, in1_pin, in2_pin, enable_pin, pwm_freq=1000):
-        self.in1 = Pin(in1_pin, Pin.OUT)
-        self.in2 = Pin(in2_pin, Pin.OUT)
-        self.enable_pwm = PWM(Pin(enable_pin))
-        self.enable_pwm.freq(pwm_freq)
+    def __init__(self, in1_pin=14, in2_pin=15, pwm_freq=10):  # PWM-Freq * strange but I use a 1.5 V motor at 5 V supply
+        # Setup für PWM auf den Eingängen IN1 und IN2
+        self.in1 = PWM(Pin(in1_pin))
+        self.in2 = PWM(Pin(in2_pin))
+        self.in1.freq(pwm_freq)
+        self.in2.freq(pwm_freq)
+        
         self.is_running = False
         self.start_time = None
-
+    
     def forward(self, speed):
         if not self.is_running:
             print("Motor läuft vorwärts")
-            self.in1.value(1)
-            self.in2.value(0)
-            self.enable_pwm.duty_u16(int(speed * 65535))
+            pwm_value = min(max(int(65535 * speed), 0), 65535)
+            self.in1.duty_u16(pwm_value)   # Setze PWM für Geschwindigkeit auf IN1
+            self.in2.duty_u16(0)           # Setze IN2 auf 0 für Vorwärtsbewegung
+            print(f"PWM-Wert für IN1 gesetzt auf: {pwm_value} (Speed: {speed})")
             self.is_running = True
             self.start_time = utime.ticks_ms()
 
     def stop(self):
         if self.is_running:
             print("Motor gestoppt")
-            self.in1.value(0)
-            self.in2.value(0)
-            self.enable_pwm.duty_u16(0)
+            # Stoppt den Motor, indem beide Pins auf 0 gesetzt werden
+            self.in1.duty_u16(0)
+            self.in2.duty_u16(0)
             self.is_running = False
             self.start_time = None
 
     def check_and_stop(self):
+        # Überprüfen, ob der Motor länger als 20 Sekunden läuft
         if self.is_running and self.start_time is not None:
             elapsed_time = utime.ticks_diff(utime.ticks_ms(), self.start_time)
             if elapsed_time >= 20000:
@@ -119,6 +122,7 @@ class WiFiIRCClientESP01S:
             print("Failed to connect to IRC server.")
 
     def handle_server_messages(self):
+        global motorspeed
         while True:
             if self.uart.any():
                 data = self.uart.read(self.uart.any()).decode('utf-8')
@@ -127,7 +131,7 @@ class WiFiIRCClientESP01S:
                 if 'PRIVMSG' in data:
                     if ':play' in data:
                         print("play")
-                        motor.forward(0.5)
+                        motor.forward(motorspeed)
                     elif ':stop' in data:
                         print("stop")
                         motor.stop()
@@ -145,7 +149,7 @@ class WiFiIRCClientESP01S:
                     self.send_tcp_data(f"PRIVMSG {irc_channel} :stop\r\n")
                 else:
                     print("Taster gedrückt, Motor läuft vorwärts")
-                    motor.forward(0.5)
+                    motor.forward(motorspeed)
                     self.send_tcp_data(f"PRIVMSG {irc_channel} :play\r\n")
                 utime.sleep(0.5)
 
@@ -342,7 +346,7 @@ Connection: close\r
 
 # Global Instances
 button = Pin(17, Pin.IN, Pin.PULL_UP)
-motor = Motor(in1_pin=14, in2_pin=15, enable_pin=16)
+motor = Motor(in1_pin=14, in2_pin=15)
 
 # Main Function
 def main():
