@@ -7,10 +7,10 @@ import sys
 # Wi-Fi and IRC initialization
 irc_channel = ""
 irc_password = ""
-motorspeed = 0.0972
+motorspeed = 0.089
 
 class Motor:
-    def __init__(self, in1_pin=14, in2_pin=15, pwm_freq=10):
+    def __init__(self, in1_pin=14, in2_pin=15, pwm_freq=20):
         self.in1_pin = in1_pin
         self.in2_pin = in2_pin
         self.pwm_freq = pwm_freq
