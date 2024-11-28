@@ -5,7 +5,7 @@ import binascii
 import sys
 
 # Wi-Fi and IRC initialization
-irc_channel = ""
+irc_channel = "#..."
 irc_password = ""
 motorspeed = 0.089
 
@@ -54,6 +54,9 @@ class WiFiIRCClientESP01S:
     def __init__(self, uart_id, rx_pin, tx_pin, baudrate=115200):
         self.uart = UART(uart_id, rx=Pin(rx_pin), tx=Pin(tx_pin), baudrate=baudrate)
         self.flush_uart_buffer()
+        self.last_alive_time = utime.ticks_ms()  # Timer für 'Alive'-Nachricht
+        self.irc_nick = '' 
+
     def flush_uart_buffer(self):
         while self.uart.any():
             self.uart.read(self.uart.any())
@@ -100,6 +103,7 @@ class WiFiIRCClientESP01S:
         utime.sleep(2)
         return True
     def connect_to_irc(self, server, port, irc_nick):
+        self.irc_nick = irc_nick  # Nickname speichern
         self.send_command('AT+CIPCLOSE', timeout=5000)
         utime.sleep(0.5)
         response = self.send_command(f'AT+CIPSTART="TCP","{server}",{port}', 'CONNECT', 10000)
@@ -117,24 +121,49 @@ class WiFiIRCClientESP01S:
                 print("Failed to send IRC commands.")
         else:
             print("Failed to connect to IRC server.")
+            # Optional: Versuch, die Verbindung erneut herzustellen
+            utime.sleep(5)
+            self.connect_to_irc(server, port, irc_nick)
+            
+    def reconnect_to_irc(self):
+        print("Versuche, die Verbindung zum IRC-Server wiederherzustellen...")
+        self.connect_to_irc("irc.oftc.net", 6667, self.irc_nick)
+        
     def handle_server_messages(self):
         global motorspeed
         while True:
-            if self.uart.any():
-                data = self.uart.read(self.uart.any()).decode('utf-8')
-                print("Empfangene Daten:", data)
-                if 'PRIVMSG' in data:
-                    if ':play' in data:
-                        print("play")
-                        motor.forward(motorspeed)
-                    elif ':stop' in data:
-                        print("stop")
-                        motor.stop()
-                if "PING :" in data:
-                    server_id = data.split("PING :", 1)[1].strip()
-                    pong_command = f"PONG :{server_id}\r\n"
-                    print("Sende PONG:", pong_command)
-                    self.send_tcp_data(pong_command)
+            try:
+                if self.uart.any():
+                    data = self.uart.read(self.uart.any()).decode('utf-8')
+                    print("Empfangene Daten:", data)
+                    if 'PRIVMSG' in data:
+                        if ':play' in data:
+                            print("play")
+                            motor.forward(motorspeed)
+                        elif ':stop' in data:
+                            print("stop")
+                            motor.stop()
+                    if "PING :" in data:
+                        server_id = data.split("PING :", 1)[1].strip()
+                        pong_command = f"PONG :{server_id}\r\n"
+                        print("Sende PONG:", pong_command)
+                        self.send_tcp_data(pong_command)
+
+                # Überprüfen, ob 5 Minuten vergangen sind
+                current_time = utime.ticks_ms()
+                if utime.ticks_diff(current_time, self.last_alive_time) >= 300000:
+                    # 'Alive'-Nachricht senden
+                    alive_message = f"PRIVMSG {irc_channel} :{self.irc_nick} ist noch aktiv.\r\n"
+                    self.send_tcp_data(alive_message)
+                    print("Alive-Nachricht gesendet.")
+                    self.last_alive_time = current_time  # Timer zurücksetzen
+
+            except Exception as e:
+                print("Exception occurred:", e)
+                # Versuch, die Verbindung wiederherzustellen
+                self.reconnect_to_irc()
+
+            # Überprüfen des Tasters und der Motorsteuerung
             if not button.value():
                 if motor.is_running:
                     print("Taster gedrückt, Motor wird gestoppt")
@@ -147,6 +176,7 @@ class WiFiIRCClientESP01S:
                 utime.sleep(0.5)
             motor.check_and_stop()
             utime.sleep(0.05)
+
     def start_hotspot(self):
         self.send_command('ATE0')
         self.send_command('AT+CWMODE=2')
@@ -336,7 +366,7 @@ def main():
         with open('credentials.txt', 'r') as f:
             ssid, password = [line.strip() for line in f.readlines()]
         wifi_irc_client = WiFiIRCClientESP01S(uart_id=0, rx_pin=1, tx_pin=0)
-        unique_string = binascii.hexlify(os.urandom(3)).decode('utf-8')[:5]
+        unique_string = binascii.hexlify(os.urandom(4)).decode('utf-8')[:7]
         irc_nick = f"Pico{unique_string}"
         if wifi_irc_client.connect_to_wifi(ssid, password):
             wifi_irc_client.connect_to_irc("irc.oftc.net", 6667, irc_nick)
@@ -349,3 +379,4 @@ def main():
         wifi_setup.start_hotspot()
         wifi_setup.serve_page()
 main()
+
