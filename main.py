@@ -6,7 +6,7 @@ import sys
 
 # Wi-Fi and IRC initialization
 irc_channel = "#..."
-irc_password = ""
+irc_password = "..."
 motorspeed = 0.089
 
 class Motor:
@@ -69,12 +69,14 @@ class WiFiIRCClientESP01S:
                 if expected in buffer:
                     return buffer
         return buffer
+    
     def send_command(self, cmd, expected_response='OK', timeout=9000):
         self.flush_uart_buffer()
         self.uart.write((cmd + '\r\n').encode('utf-8'))
         response = self.read_response(expected_response, timeout)
         print(f"Response to '{cmd}': {response.strip()}")
         return response
+    
     def send_tcp_data(self, data):
         length = len(data)
         self.flush_uart_buffer()
@@ -88,6 +90,7 @@ class WiFiIRCClientESP01S:
             return False
         print("Data sent successfully.")
         return True
+    
     def connect_to_wifi(self, ssid, password):
         self.send_command('ATE0')
         if 'OK' not in self.send_command('AT', timeout=2000):
@@ -102,6 +105,7 @@ class WiFiIRCClientESP01S:
         print("Connected to Wi-Fi.")
         utime.sleep(2)
         return True
+    
     def connect_to_irc(self, server, port, irc_nick):
         self.irc_nick = irc_nick  # Nickname speichern
         self.send_command('AT+CIPCLOSE', timeout=5000)
@@ -131,7 +135,9 @@ class WiFiIRCClientESP01S:
         
     def handle_server_messages(self):
         global motorspeed
+          
         while True:
+            #wdt.feed()
             try:
                 if self.uart.any():
                     data = self.uart.read(self.uart.any()).decode('utf-8')
@@ -154,7 +160,12 @@ class WiFiIRCClientESP01S:
                 if utime.ticks_diff(current_time, self.last_alive_time) >= 300000:
                     # 'Alive'-Nachricht senden
                     alive_message = f"PRIVMSG {irc_channel} :{self.irc_nick} ist noch aktiv.\r\n"
-                    self.send_tcp_data(alive_message)
+                    #self.send_tcp_data(alive_message)
+                    if not self.send_tcp_data(alive_message):
+                        print("Fehler beim Senden der Alive-Nachricht. Gerät wird neu gestartet.")
+                        with open('error_log.txt', 'a') as f:
+                            f.write(f"Neustart am {utime.localtime()}: Alive-Nachricht konnte nicht gesendet werden.\n")
+                        machine.reset()
                     print("Alive-Nachricht gesendet.")
                     self.last_alive_time = current_time  # Timer zurücksetzen
 
@@ -184,12 +195,14 @@ class WiFiIRCClientESP01S:
         self.send_command('AT+CWSAP="PicoSetup","",1,0')
         self.send_command('AT+CIPMUX=1')
         self.send_command('AT+CIPSERVER=1,80')
+        
     def serve_page(self):
         while True:
             if self.uart.any():
                 data = self.uart.read(self.uart.any()).decode('utf-8')
                 self.process_request(data)
             utime.sleep(0.1)
+            
     def process_request(self, data):
         print("Vollständige Anfrage empfangen.")
         if '+IPD' in data:
@@ -336,6 +349,7 @@ Connection: close\r
                     sys.exit()
             except Exception as e:
                 print("Fehler beim Verarbeiten der Anfrage:", e)
+                
     def send_data(self, channel, data):
         length = len(data)
         send_cmd = f'AT+CIPSEND={channel},{length}'
@@ -344,6 +358,7 @@ Connection: close\r
             if 'SEND OK' not in self.read_response('SEND OK', timeout=5000):
                 print("Fehler beim Senden der Daten.")
         self.send_command(f'AT+CIPCLOSE={channel}')
+        
     def url_decode(self, s):
         res, i = '', 0
         while i < len(s):
@@ -361,6 +376,8 @@ button = Pin(17, Pin.IN, Pin.PULL_UP)
 motor = Motor(in1_pin=14, in2_pin=15)
 # Main Function
 def main():
+    #global wdt
+    #wdt = WDT(timeout=8000)
     if 'credentials.txt' in os.listdir():
         print("credentials.txt found. Starting main...")
         with open('credentials.txt', 'r') as f:
@@ -379,4 +396,3 @@ def main():
         wifi_setup.start_hotspot()
         wifi_setup.serve_page()
 main()
-
