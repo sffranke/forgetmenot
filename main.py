@@ -5,8 +5,8 @@ import binascii
 import sys
 
 # Wi-Fi and IRC initialization
-irc_channel = "#..."
-irc_password = "..."
+irc_channel = "#---"
+irc_password = "---"
 motorspeed = 0.089
 
 class Motor:
@@ -37,7 +37,7 @@ class Motor:
     def stop(self):
         if self.is_running:
             print("Motor gestoppt")
-            self.in1.duty_u16(0)  # Setze Duty Cycle auf 0 statt PWM zu deinitialisieren
+            self.in1.duty_u16(0)
             self.in2.duty_u16(0)
             self.is_running = False
             self.start_time = None
@@ -49,17 +49,19 @@ class Motor:
             if elapsed_time >= 20000:
                 self.stop()
 
-# WiFi and IRC Client Class
 class WiFiIRCClientESP01S:
     def __init__(self, uart_id, rx_pin, tx_pin, baudrate=115200):
         self.uart = UART(uart_id, rx=Pin(rx_pin), tx=Pin(tx_pin), baudrate=baudrate)
         self.flush_uart_buffer()
-        self.last_alive_time = utime.ticks_ms()  # Timer für 'Alive'-Nachricht
-        self.irc_nick = '' 
+        self.last_alive_time = utime.ticks_ms()
+        self.irc_nick = ''
+        self.ssid = ''
+        self.password = ''
 
     def flush_uart_buffer(self):
         while self.uart.any():
             self.uart.read(self.uart.any())
+    
     def read_response(self, expected, timeout=3000):
         start_time = utime.ticks_ms()
         buffer = ''
@@ -69,110 +71,143 @@ class WiFiIRCClientESP01S:
                 if expected in buffer:
                     return buffer
         return buffer
-    
+
     def send_command(self, cmd, expected_response='OK', timeout=9000):
         self.flush_uart_buffer()
         self.uart.write((cmd + '\r\n').encode('utf-8'))
         response = self.read_response(expected_response, timeout)
         print(f"Response to '{cmd}': {response.strip()}")
         return response
-    
+
     def send_tcp_data(self, data):
-        length = len(data)
-        self.flush_uart_buffer()
-        self.uart.write(f'AT+CIPSEND={length}\r\n'.encode('utf-8'))
-        if '>' not in self.read_response('>', timeout=10000):
-            print("No '>' prompt received. Cannot send data.")
+        try:
+            length = len(data)
+            self.flush_uart_buffer()
+            self.uart.write(f'AT+CIPSEND={length}\r\n'.encode('utf-8'))
+            if '>' not in self.read_response('>', timeout=10000):
+                print("No '>' prompt received. Cannot send data.")
+                return False
+            self.uart.write(data.encode('utf-8'))
+            if 'SEND OK' not in self.read_response('SEND OK', timeout=15000):
+                print("No 'SEND OK' received after sending data.")
+                return False
+            print("Data sent successfully.")
+            return True
+        except Exception as e:
+            print("Exception in send_tcp_data:", e)
             return False
-        self.uart.write(data.encode('utf-8'))
-        if 'SEND OK' not in self.read_response('SEND OK', timeout=15000):
-            print("No 'SEND OK' received after sending data.")
-            return False
-        print("Data sent successfully.")
-        return True
-    
+
     def connect_to_wifi(self, ssid, password):
+        self.ssid = ssid  # Speichern für spätere Verwendung
+        self.password = password
         self.send_command('ATE0')
         if 'OK' not in self.send_command('AT', timeout=2000):
-            print("ESP-01S not responding.")
+            print("ESP-01S antwortet nicht.")
             return False
         self.send_command('AT+CWMODE=1')
         self.send_command('AT+CIPMUX=0')
         self.send_command('AT+CIPDINFO=1')
-        if 'WIFI GOT IP' not in self.send_command(f'AT+CWJAP="{ssid}","{password}"', timeout=15000):
-            print("Failed to connect to Wi-Fi.")
-            return False
-        print("Connected to Wi-Fi.")
-        utime.sleep(2)
-        return True
-    
+
+        max_attempts = 3  # Insgesamt 3 Versuche
+        for attempt in range(1, max_attempts + 1):
+            print(f"Versuche, eine Verbindung zum Wi-Fi herzustellen (Versuch {attempt} von {max_attempts})...")
+            response = self.send_command(f'AT+CWJAP="{ssid}","{password}"', timeout=15000)
+            if 'WIFI GOT IP' in response or 'OK' in response:
+                print("Mit Wi-Fi verbunden.")
+                utime.sleep(2)
+                return True
+            else:
+                print("Verbindung zum Wi-Fi fehlgeschlagen.")
+                if attempt < max_attempts:
+                    print("Erneuter Versuch in 5 Sekunden...")
+                    utime.sleep(5)
+                else:
+                    print("Maximale Anzahl an Versuchen erreicht. Verbindung konnte nicht hergestellt werden.")
+                    return False
+
+    def is_wifi_connected(self):
+        response = self.send_command('AT+CWJAP?', expected_response='OK', timeout=5000)
+        connected = '+CWJAP:' in response and 'No AP' not in response
+        print(f"is_wifi_connected: {connected}")
+        return connected
+
     def connect_to_irc(self, server, port, irc_nick):
         self.irc_nick = irc_nick  # Nickname speichern
         self.send_command('AT+CIPCLOSE', timeout=5000)
         utime.sleep(0.5)
-        response = self.send_command(f'AT+CIPSTART="TCP","{server}",{port}', 'CONNECT', 10000)
-        if 'CONNECT' in response:
-            print("Connected to IRC server.")
-            irc_commands = (
-                f"NICK {irc_nick}\r\n"
-                f"USER {irc_nick} 0 * :{irc_nick}\r\n"
-                f"JOIN {irc_channel} {irc_password}\r\n"
-                f"PRIVMSG {irc_channel} :{irc_nick} ist online!\r\n"
-            )
-            if self.send_tcp_data(irc_commands):
-                self.handle_server_messages()
+        while True:
+            response = self.send_command(f'AT+CIPSTART="TCP","{server}",{port}', 'CONNECT', 10000)
+            if 'CONNECT' in response:
+                print("Connected to IRC server.")
+                irc_commands = (
+                    f"NICK {irc_nick}\r\n"
+                    f"USER {irc_nick} 0 * :{irc_nick}\r\n"
+                    f"JOIN {irc_channel} {irc_password}\r\n"
+                    f"PRIVMSG {irc_channel} :{irc_nick} ist online!\r\n"
+                )
+                if self.send_tcp_data(irc_commands):
+                    self.flush_uart_buffer()  # UART-Puffer leeren
+                    return True  # Erfolgreich verbunden
+                else:
+                    print("Failed to send IRC commands.")
             else:
-                print("Failed to send IRC commands.")
-        else:
-            print("Failed to connect to IRC server.")
-            # Optional: Versuch, die Verbindung erneut herzustellen
+                print("Failed to connect to IRC server.")
+            # Warte und versuche erneut
+            print("Retrying to connect to IRC server in 5 Sekunden...")
             utime.sleep(5)
-            self.connect_to_irc(server, port, irc_nick)
-            
-    def reconnect_to_irc(self):
-        print("Versuche, die Verbindung zum IRC-Server wiederherzustellen...")
-        self.connect_to_irc("irc.oftc.net", 6667, self.irc_nick)
-        
+
     def handle_server_messages(self):
         global motorspeed
-          
+        buffer = ''
+        last_data_time = utime.ticks_ms()  # Timer für empfangene Daten
+        timeout_interval = 300000  # 5 Minuten in Millisekunden
         while True:
-            #wdt.feed()
             try:
                 if self.uart.any():
                     data = self.uart.read(self.uart.any()).decode('utf-8')
-                    print("Empfangene Daten:", data)
-                    if 'PRIVMSG' in data:
-                        if ':play' in data:
-                            print("play")
-                            motor.forward(motorspeed)
-                        elif ':stop' in data:
-                            print("stop")
-                            motor.stop()
-                    if "PING :" in data:
-                        server_id = data.split("PING :", 1)[1].strip()
-                        pong_command = f"PONG :{server_id}\r\n"
-                        print("Sende PONG:", pong_command)
-                        self.send_tcp_data(pong_command)
+                    buffer += data  # Daten zum Puffer hinzufügen
+                    last_data_time = utime.ticks_ms()  # Timer zurücksetzen
+                    # Nach vollständigen Zeilen suchen
+                    while '\r\n' in buffer:
+                        line, buffer = buffer.split('\r\n', 1)
+                        line = line.strip()
+                        if line:
+                            print("Empfangene Zeile:", line)
+                            # Hier die empfangene Zeile verarbeiten
+                            if 'PRIVMSG' in line:
+                                if ':play' in line:
+                                    print("play")
+                                    motor.forward(motorspeed)
+                                elif ':stop' in line:
+                                    print("stop")
+                                    motor.stop()
+                            if "PING :" in line:
+                                server_id = line.split("PING :", 1)[1].strip()
+                                pong_command = f"PONG :{server_id}\r\n"
+                                print("Sende PONG:", pong_command)
+                                if not self.send_tcp_data(pong_command):
+                                    print("Fehler beim Senden der PONG-Nachricht.")
+                                    break  # Schleife verlassen, um die Verbindung neu aufzubauen
 
-                # Überprüfen, ob 5 Minuten vergangen sind
+                # Überprüfen, ob seit langem keine Daten empfangen wurden
                 current_time = utime.ticks_ms()
+                if utime.ticks_diff(current_time, last_data_time) >= timeout_interval:
+                    print("Timeout: Keine Daten vom IRC-Server empfangen. Verbindung wird neu aufgebaut.")
+                    break  # Schleife verlassen, um die Verbindung neu aufzubauen
+
+                # Überprüfen, ob 5 Minuten seit der letzten Alive-Nachricht vergangen sind
                 if utime.ticks_diff(current_time, self.last_alive_time) >= 300000:
                     # 'Alive'-Nachricht senden
                     alive_message = f"PRIVMSG {irc_channel} :{self.irc_nick} ist noch aktiv.\r\n"
-                    #self.send_tcp_data(alive_message)
                     if not self.send_tcp_data(alive_message):
-                        print("Fehler beim Senden der Alive-Nachricht. Gerät wird neu gestartet.")
-                        with open('error_log.txt', 'a') as f:
-                            f.write(f"Neustart am {utime.localtime()}: Alive-Nachricht konnte nicht gesendet werden.\n")
-                        machine.reset()
+                        print("Fehler beim Senden der Alive-Nachricht.")
+                        break  # Schleife verlassen, um die Verbindung neu aufzubauen
                     print("Alive-Nachricht gesendet.")
                     self.last_alive_time = current_time  # Timer zurücksetzen
 
             except Exception as e:
                 print("Exception occurred:", e)
-                # Versuch, die Verbindung wiederherzustellen
-                self.reconnect_to_irc()
+                break  # Schleife verlassen, um die Verbindung neu aufzubauen
 
             # Überprüfen des Tasters und der Motorsteuerung
             if not button.value():
@@ -186,7 +221,7 @@ class WiFiIRCClientESP01S:
                     self.send_tcp_data(f"PRIVMSG {irc_channel} :play\r\n")
                 utime.sleep(0.5)
             motor.check_and_stop()
-            utime.sleep(0.05)
+            utime.sleep(0.1)
 
     def start_hotspot(self):
         self.send_command('ATE0')
@@ -195,14 +230,14 @@ class WiFiIRCClientESP01S:
         self.send_command('AT+CWSAP="PicoSetup","",1,0')
         self.send_command('AT+CIPMUX=1')
         self.send_command('AT+CIPSERVER=1,80')
-        
+
     def serve_page(self):
         while True:
             if self.uart.any():
                 data = self.uart.read(self.uart.any()).decode('utf-8')
                 self.process_request(data)
             utime.sleep(0.1)
-            
+
     def process_request(self, data):
         print("Vollständige Anfrage empfangen.")
         if '+IPD' in data:
@@ -349,7 +384,7 @@ Connection: close\r
                     sys.exit()
             except Exception as e:
                 print("Fehler beim Verarbeiten der Anfrage:", e)
-                
+
     def send_data(self, channel, data):
         length = len(data)
         send_cmd = f'AT+CIPSEND={channel},{length}'
@@ -358,7 +393,7 @@ Connection: close\r
             if 'SEND OK' not in self.read_response('SEND OK', timeout=5000):
                 print("Fehler beim Senden der Daten.")
         self.send_command(f'AT+CIPCLOSE={channel}')
-        
+
     def url_decode(self, s):
         res, i = '', 0
         while i < len(s):
@@ -371,28 +406,35 @@ Connection: close\r
                 res += s[i]
             i += 1
         return res
+
 # Global Instances
 button = Pin(17, Pin.IN, Pin.PULL_UP)
 motor = Motor(in1_pin=14, in2_pin=15)
+
 # Main Function
 def main():
-    #global wdt
-    #wdt = WDT(timeout=8000)
     if 'credentials.txt' in os.listdir():
-        print("credentials.txt found. Starting main...")
+        print("credentials.txt gefunden. Starte Hauptprogramm...")
         with open('credentials.txt', 'r') as f:
             ssid, password = [line.strip() for line in f.readlines()]
         wifi_irc_client = WiFiIRCClientESP01S(uart_id=0, rx_pin=1, tx_pin=0)
         unique_string = binascii.hexlify(os.urandom(4)).decode('utf-8')[:7]
         irc_nick = f"Pico{unique_string}"
         if wifi_irc_client.connect_to_wifi(ssid, password):
-            wifi_irc_client.connect_to_irc("irc.oftc.net", 6667, irc_nick)
+            while True:
+                if wifi_irc_client.connect_to_irc("irc.oftc.net", 6667, irc_nick):
+                    wifi_irc_client.handle_server_messages()
+                else:
+                    print("Verbindung zum IRC-Server fehlgeschlagen. Neuer Versuch in 5 Sekunden.")
+                    utime.sleep(5)
         else:
-            print("Deleting credentials.txt due to failed connection. Please restart!")
+            print("Lösche credentials.txt aufgrund fehlgeschlagener Verbindung. Bitte neu starten!")
             os.remove('credentials.txt')
     else:
-        print("credentials.txt not found. Starting hotspot...")
+        print("credentials.txt nicht gefunden. Starte Hotspot...")
         wifi_setup = WiFiIRCClientESP01S(uart_id=0, rx_pin=1, tx_pin=0)
         wifi_setup.start_hotspot()
         wifi_setup.serve_page()
+
 main()
+
