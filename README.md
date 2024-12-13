@@ -23,7 +23,12 @@ Hardware:
 In this Documentaion I use old Pi Picos without built in WiFi just because I have some of them left.  
 The code is for the Pi Pico without built in WiFi, it needs some changes if you use the Pi Pico with built in WiFi (Pico W)!
 
-<img src="forgetmenot_Steckplatine.png" width="400">
+<img src="assets/forgetmenot_Steckplatine.png" width="400">
+
+<img src="assets/Bildschirmfoto vom 2024-12-07 14-01-23.png" width="400">
+
+<video src="assets/forgetmenot.mp4" width="400">
+
 
 Possible future improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
