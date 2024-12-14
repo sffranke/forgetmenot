@@ -28,7 +28,7 @@ The code is for the Pi Pico without built in WiFi, it needs some changes if you 
 <img src="assets/Bildschirmfoto vom 2024-12-07 14-01-23.png" width="400">
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=lZYdA2yhgEA" target="_blank">
- <img src="http://img.youtube.com/vi/lZYdA2yhgEA/mqdefault.jpg" alt="Watch the video" width="240" height="180" border="10" />
+ <img src="http://img.youtube.com/vi/lZYdA2yhgEA/mqdefault.jpg" alt="Watch the video" width="400" height="180" border="10" />
 </a>
 
 Possible future improvements:
