@@ -29,8 +29,6 @@ The code is for the Pi Pico without built in WiFi, it needs some changes if you 
 
 [![forgetmenot](https://www.youtube.com/watch?v=lZYdA2yhgEA)
 
-[![FORGETMENOT]]([[https://www.youtube.com/watch?v=YOUTUBE_VIDEO_ID_HERE]([https://www.youtube.com/watch?v=lZYdA2yhgEA](https://www.youtube.com/watch?v=lZYdA2yhgEA))](https://youtu.be/lZYdA2yhgEA))
-
 Possible future improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
 - Play a beep when ready
