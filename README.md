@@ -30,6 +30,9 @@ The code is for the Pi Pico without built in WiFi, it needs some changes if you 
 <video src="assets/forgetmenot.mp4" width="400">
 
 
+
+[![FORGETMENOT]]([https://youtu.be/lZYdA2yhgEA](https://youtu.be/lZYdA2yhgEA) "FORGETMENOT")
+
 Possible future improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
 - Play a beep when ready
