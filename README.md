@@ -27,7 +27,9 @@ The code is for the Pi Pico without built in WiFi, it needs some changes if you 
 
 <img src="assets/Bildschirmfoto vom 2024-12-07 14-01-23.png" width="400">
 
-[![FORGETMENOT]]([https://www.youtube.com/watch?v=YOUTUBE_VIDEO_ID_HERE](https://youtu.be/lZYdA2yhgEA))
+[![forgetmenot](https://www.youtube.com/watch?v=lZYdA2yhgEA)
+
+[![FORGETMENOT]]([[https://www.youtube.com/watch?v=YOUTUBE_VIDEO_ID_HERE]([https://www.youtube.com/watch?v=lZYdA2yhgEA](https://www.youtube.com/watch?v=lZYdA2yhgEA))](https://youtu.be/lZYdA2yhgEA))
 
 Possible future improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
