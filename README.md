@@ -10,6 +10,7 @@ Hardware:
 - Mini barrel organ https://amzn.to/40GhTKe
 - motor shaft connector https://amzn.to/3UFKeN1
 - Motor 60 rpm or faster https://amzn.to/40Dn0e2
+- OR organ with motor https://www.ebay.de/itm/315267461015
 - or Mini barrel organ with motor (difficult to find)
 - Pi Pico  https://amzn.to/3ClQl2D
 - or Pi Pico W https://amzn.to/3YNYEfo
