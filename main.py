@@ -1,6 +1,13 @@
 import network, ntptime, socket, os, time, machine, math, random
 from neopixel import Neopixel
 
+SIMULATE_TIME = False  # Zum Testen: True, sonst False
+#SIMULATED_TIME = (2025, 4, 7, 11, 30, 0, 0, 97) # (m,d,h,m,s,weekd,dayiny)
+#SIMULATED_TIME = (2025, 4, 7, 12, 30, 0, 0, 97) # (m,d,h,m,s,weekd,dayiny)
+#SIMULATED_TIME = (2025, 4, 7, 1, 15, 0, 0, 97) # (m,d,h,m,s,weekd,dayiny)
+#SIMULATED_TIME = (2025, 4, 7, 2, 45, 0, 0, 97) # (m,d,h,m,s,weekd,dayiny)
+#SIMULATED_TIME = (2025, 4, 7, 11, 45, 0, 0, 97) # (m,d,h,m,s,weekd,dayiny)
+
 # ----------------------- Neopixel Setup -----------------------------
 anzahl_LEDs = 256         # 16×16 LED-Matrix
 pin = 1                   # z.B. GP2 des Pico W
@@ -25,9 +32,27 @@ rose_leaves = (0, int(255*brightness), 0)    # Grün
 
 smile_color = (int(255*brightness), 0, int(255*brightness))
 
-# ----------------------- Array für zufällige Nachrichten (Laufschrift) -----------------------------
-messages = ["ICH LIEBE DICH!", "HALLO WELT!", "Bom Dia!", "TE AMO!", "VIEL SPASS!", "Trump is e Luftbumb"]
+def getoi():
+    t = get_local_time()
+    hour = t[3]
+    print(hour)
+    if 6 <= hour < 12:
+        return "BOM DIA!"
+    elif 12 <= hour < 18:
+        return "BOA TARDE!"
+    else:
+        return "BOA NOITE"
+  # Für Stunden zwischen Mitternacht und 6 Uhr als Fallback
 
+# ----------------------- Array für zufällige Nachrichten (Laufschrift) -----------------------------
+messages = [
+    "ICH LIEBE DICH!",
+    #"HALLO WELT!",
+    getoi,         # Hier die Funktion als Objekt übergeben, nicht getoi()
+    "TE AMO!",
+    #"VIEL SPASS!",
+    #"TRUMP IS E LUFTBUMB"
+]
 # ----------------------- Font-Definitionen -----------------------------
 ziffern = {
     "0": [[1,1,1],[1,0,1],[1,0,1],[1,0,1],[1,1,1]],
@@ -58,7 +83,7 @@ letters = {
     "K": [[1,0,1],[1,1,0],[1,1,0],[1,0,1],[1,0,1]],
     "L": [[1,0,0],[1,0,0],[1,0,0],[1,0,0],[1,1,1]],
     "M": [[1,0,1],[1,1,1],[1,0,1],[1,0,1],[1,0,1]],
-    "N": [[1,0,1],[1,1,1],[1,1,1],[1,0,1],[1,0,1]],
+    "N": [[1,0,1],[1,0,1],[1,1,1],[1,0,1],[1,0,1]],
     "O": [[0,1,0],[1,0,1],[1,0,1],[1,0,1],[0,1,0]],
     "P": [[1,1,0],[1,0,1],[1,1,0],[1,0,0],[1,0,0]],
     "Q": [[0,1,0],[1,0,1],[1,0,1],[1,1,1],[0,1,1]],
@@ -90,29 +115,15 @@ if "/" not in upper_font:
         [0,0,0]
     ]
 # Spezielle Darstellung für "1": 2×5-Pixel (nur eine Spalte breit)
+
 upper_font["1"] = [
-    [1],
-    [1],
-    [1],
-    [1],
-    [1]
-]
-'''
-upper_font["3"] = [
-    [1,1],
     [0,1],
     [1,1],
     [0,1],
-    [1,1]
-]
-upper_font["4"] = [
-    [1,0],
-    [1,0],
-    [1,1],
     [0,1],
     [0,1]
 ]
-'''
+
 # Im oberen Bereich soll ein Leerzeichen nur 1x5 Pixel groß sein.
 upper_font[" "] = [
     [0],
@@ -186,7 +197,7 @@ rose_anim_x = 4
 rose_anim_y_offset = 1
 
 # Neue globale Variablen für den zentralen Animationstimer
-upper_anim_delay = 3000  # Verzögerung in Millisekunden (35,55 s)
+upper_anim_delay = 3000  # Verzögerung in Millisekunden
 next_upper_update = time.ticks_ms() + upper_anim_delay
 # Variable, die speichert, welche Animation aktuell aktiv ist
 current_upper_anim = None
@@ -281,7 +292,59 @@ def display_upper_text_frame(text):
             else:
                 set_pixel_frame(start_x + col, y_offset + row, (0, 0, 0))
 
-# ----------------------- Funktion zur Rotation (für die Animationen) -----------------------------
+# ----------------------- Neue Funktion: Dynamische Darstellung mit Pixel-Offsets -----------------------------
+def display_dynamic_upper_text_frame(text):
+    """
+    Schreibt den übergebenen Text linksbündig in den oberen Bereich (z.B. Zeilen 0–4)
+    ohne zusätzliche Standardzwischenpixel, aber:
+      - Enthält der Text 6 Zeichen, wird vor dem vorletzten UND vor dem letzten Zeichen
+        jeweils ein extra Leerpixel (1 Pixel) eingefügt.
+      - Enthält der Text 5 Zeichen, wird vor dem letzten Zeichen ein extra Leerpixel eingefügt.
+    
+    Annahmen zu den Breiten:
+      - "1" ist 2 Pixel breit.
+      - Andere Ziffern (0,2,3,4,5,6,7,8,9) sowie der Doppelpunkt ":" sind 3 Pixel breit.
+      - Ein Leerzeichen (" ") ist 1 Pixel breit.
+      - Für Buchstaben und andere Zeichen wird die Breite anhand des Font-Dictionary (upper_font) ermittelt.
+    """
+    y_offset = 2        # Fester y-Versatz für den oberen Bereich
+    x_cursor = 0        # Startposition ganz links
+    n = len(text)       # Gesamtlänge des Textes
+    #print (n)
+    # Hilfsfunktion: Bestimme die Breite eines Zeichens
+    def char_width(ch):
+        if ch == "1":
+            return 2
+        elif ch in "0123456789:":
+            return 3
+        elif ch == " ":
+            return 1
+        else:
+            return len(upper_font.get(ch, upper_font[" "])[0])
+    
+    # Gehe Zeichen für Zeichen durch
+    for i, ch in enumerate(text):
+        # Falls der Text 5 Zeichen enthält, vor dem vorletzten und letzten Zeichen jeweils extra 1 Pixel Abstand einfügen.
+        if n == 5 and i in (3, 4):
+            x_cursor += 1
+        # Falls der Text 5 o. 6 Zeichen enthält, vor dem letzten Zeichen extra 1 Pixel Abstand einfügen.
+        if n == 4 and i == 3:
+            x_cursor += 2
+        if n == 6 and i == 5:
+            x_cursor += 1
+
+        # Hole die Bitmap des aktuellen Zeichens aus dem Dictionary.
+        char_matrix = upper_font.get(ch, upper_font[" "])
+        # Zeichne das Zeichen – Annahme: Font-Matrix ist 5 Pixel hoch.
+        for row in range(5):
+            for col in range(len(char_matrix[row])):
+                if char_matrix[row][col] == 1:
+                    set_pixel_frame(x_cursor + col, y_offset + row, upper_text_color)
+        # Erhöhe den x-Cursor um die Zeichenbreite.
+        x_cursor += char_width(ch)
+
+    
+# ----------------------- Anzeige-Funktionen für obere Animation (nur Zeichnung) -----------------------------
 def rotate_matrix(matrix, angle):
     height = len(matrix)
     width = len(matrix[0])
@@ -305,7 +368,6 @@ def rotate_matrix(matrix, angle):
                 new_matrix[y][x] = 0
     return new_matrix
 
-# ----------------------- Anzeige-Funktionen für obere Animation (nur Zeichnung) -----------------------------
 def display_upper_smile_anim_frame():
     smile = upper_symbols["smile"]
     rotated = rotate_matrix(smile, smile_anim_angle)
@@ -356,25 +418,7 @@ def display_upper_rose_anim_frame():
                     set_pixel_frame(pos_x, pos_y, rose_leaves)
                 elif rose[y][x] == 2:
                     set_pixel_frame(pos_x, pos_y, rose_petals)
-'''
-def display_upper_date_anim_frame():
-    # Hole das aktuelle Datum (Tag und Monat)
-    t = get_local_time()
-    # Formatierung: z. B. "31.12" (alternativ: "{:02d}.{:02d}.{:04d}" für Tag, Monat, Jahr)
-    date_str = "{:02d}.{:02d}".format(t[2], t[1])
-    # Erzeuge die Textmatrix mithilfe des vorhandenen Fonts
-    text_matrix = create_text_matrix(date_str, upper_font, spacing=1, value=1)
-    text_width = len(text_matrix[0])
-    # Zentriere horizontal (16 Spalten) und vertikal (Oberbereich Zeile 0–8)
-    start_x = max(0, (16 - text_width) // 2)
-    y_offset = (9 - 5) // 2  # da die Matrix 5 Zeilen hoch ist
-    for row in range(5):
-        for col in range(text_width):
-            if text_matrix[row][col] == 1:
-                set_pixel_frame(start_x + col, y_offset + row, upper_text_color)
-            else:
-                set_pixel_frame(start_x + col, y_offset + row, (0, 0, 0))
-'''
+
 def display_upper_date_anim_frame():
     # Hole das aktuelle Datum (Tag und Monat)
     t = get_local_time()
@@ -386,8 +430,7 @@ def display_upper_date_anim_frame():
     # Erzeuge die Matrizen für die beiden Teile
     day_matrix = create_text_matrix(day_part, upper_font, spacing=1, value=1)
     month_matrix = create_text_matrix(month_part, upper_font, spacing=1, value=1)
-    # Kombiniere die Matrizen: Hier wird bewusst auf den zusätzlichen Spacing-Zwischenschritt verzichtet,
-    # sodass der Monatsteil um einen Pixel nach links rückt.
+    # Kombiniere die Matrizen: Hier wird bewusst auf den zusätzlichen Spacing-Zwischenschritt verzichtet
     text_matrix = []
     for row in range(5):
         text_matrix.append(day_matrix[row] + month_matrix[row])
@@ -402,6 +445,51 @@ def display_upper_date_anim_frame():
             else:
                 set_pixel_frame(start_x + col, y_offset + row, (0, 0, 0))
 
+def display_brazil_flag():
+    """
+    Malt im oberen Bereich (Zeilen 0–8) eine vereinfachte brasilianische Flagge:
+      - Hintergrund: Grüner Hintergrund (das Flaggenfeld)
+      - Gelber Diamant in der Mitte
+      - Blauer Kreis (Globus) innerhalb des Diamanten
+
+    Hinweis: Diese Darstellung ist eine stark vereinfachte Version, die sich an den Farben der brasilianischen Flagge orientiert.
+    """
+
+    # Farben (RGB) – passe sie ggf. an Deine Helligkeitseinstellungen an
+    green  = (255*brightness, 0, 0)    # Grüner Hintergrund
+    yellow = (255*brightness, 255*brightness, 0*255*brightness)  # Gelber Diamant
+    blue   = (0, 0, 255*brightness)    # Blauer Kreis
+
+    # Definiere den Bereich (z. B. obere 9 Zeilen: y=0 bis y=8, x=0 bis x=15)
+    height = 9
+    width = 16
+
+    # Bestimme das Zentrum und geeignete Parameter
+    center_x = width // 2
+    center_y = height // 2
+    # Für den Diamanten verwenden wir die Manhattan-Distanz; der Schwellenwert bestimmt, wie groß der Diamant ist.
+    diamond_threshold = 6
+    # Für den blauen Kreis (Globus) verwenden wir die Euclidean-Distanz (Quadrat der Distanz), z. B. für einen Radius von 2 Pixeln:
+    circle_radius_sq = 2 * 2
+
+    # Gehe über den gesamten oberen Bereich:
+    for y in range(height):
+        for x in range(width):
+            # Starte mit dem grünen Hintergrund (Flaggenfeld)
+            pixel_color = green
+
+            # Überprüfe, ob der Punkt (x,y) innerhalb des gelben Diamanten liegt.
+            # Der Diamant wird durch die Manhattan-Distanz zum Zentrum definiert.
+            if abs(x - center_x) + abs(y - center_y) <= diamond_threshold:
+                pixel_color = yellow
+
+            # Überschreibe, falls der Punkt im inneren blauen Kreis liegt.
+            # Hier wird die euklidische Distanz zum Zentrum herangezogen.
+            if (x - center_x) ** 2 + (y - center_y) ** 2 <= circle_radius_sq:
+                pixel_color = blue
+
+            # Setze den Pixel im Frame
+            set_pixel_frame(x, y, pixel_color)
 
 # ----------------------- Unterer Bereich: Zeitanzeige / Laufschrift -----------------------------
 def display_lower_static_frame():
@@ -451,7 +539,6 @@ def connect_wifi(ssid, password):
         start_ap()
         serve_config_page()
         machine.reset()
-        #return False
 
 def start_ap():
     wap = network.WLAN(network.AP_IF)
@@ -559,13 +646,17 @@ def is_dst(t):
     elif month == 10:
         dst_end_day = last_sunday(year, 10)
         return not (day < dst_end_day or (day == dst_end_day and hour < 3))
-
+    
 def get_local_time():
-    t_std = get_local_standard_time()
-    if is_dst(t_std):
-        return time.localtime(time.time() + 7200)
+    if SIMULATE_TIME:
+        # Simulierte Zeit: z.B. 07.04.2025, 11:45:00
+        return (SIMULATED_TIME)
     else:
-        return t_std
+        t_std = get_local_standard_time()
+        if is_dst(t_std):
+            return time.localtime(time.time() + 7200)
+        else:
+            return t_std
 
 # ----------------------- Hauptschleife -----------------------------
 FRAME_DELAY_MS = 33  # ca. 30 FPS
@@ -622,12 +713,14 @@ def main():
                         dynamic_upper_text = "1:2 " + str(x+1)
                     elif current_minute == 45:
                         dynamic_upper_text = "3:4" + str(x+1)
-                    display_upper_text_frame(dynamic_upper_text)
+                    display_dynamic_upper_text_frame(dynamic_upper_text)
                 else:
                     # Aktualisiere den Animationszustand nur einmal alle upper_anim_delay Millisekunden
                     current = time.ticks_ms()
+                    # In der Hauptschleife:
                     if time.ticks_diff(current, next_upper_update) >= 0:
-                        current_upper_anim = random.choice(["heart1", "heart2", "rose", "smile", "date"])
+                        # Füge "flag" zur Auswahl hinzu
+                        current_upper_anim = random.choice(["heart1", "heart2", "rose", "smile", "date", "flag"])
                         if current_upper_anim in ["heart1", "heart2", "smile"]:
                             heart_anim_x = (heart_anim_x + 1) % 10
                             heart_anim_y_offset += random.choice([-1, 0, 1])
@@ -639,6 +732,8 @@ def main():
                             rose_anim_x = max(0, min(rose_anim_x, 9))
                             rose_anim_y_offset = max(0, min(rose_anim_y_offset, 2))
                         next_upper_update = current + upper_anim_delay
+
+                    # Animationen im oberen Bereich
                     if current_upper_anim == "heart1":
                         display_upper_heart1_anim_frame()
                     elif current_upper_anim == "heart2":
@@ -649,6 +744,9 @@ def main():
                         display_upper_smile_anim_frame()
                     elif current_upper_anim == "date":
                         display_upper_date_anim_frame()
+                    elif current_upper_anim == "flag":
+                        display_brazil_flag()
+
                 
                 # Unterer Bereich: Zeitanzeige / Laufschrift mit zufälliger Nachricht
                 current_time = get_local_time()
@@ -658,7 +756,14 @@ def main():
                     scroll_offset = -16
                     time_str = "{:02d}:{:02d}".format(current_time[3], current_time[4])
                     time_matrix = create_text_matrix(time_str, ziffern, spacing=1, value=1)
-                    appended_text = " " + random.choice(messages)
+                    #appended_text = " " + random.choice(messages)
+                    # Beispiel im Hauptloop, dort wo du z.B. appended_text definierst:
+                    msg = random.choice(messages)
+                    if callable(msg):
+                        msg = msg()  # Führt getoi() aus und gibt den aktuellen Gruß basierend auf der Uhrzeit zurück
+
+                    appended_text = " " + msg
+
                     appended_matrix = create_text_matrix(appended_text, letters, spacing=1, value=2)
                     lower_combined_matrix = combine_matrices(time_matrix, appended_matrix, spacing=1)
                     lower_scroll_max = len(lower_combined_matrix[0])
@@ -681,3 +786,4 @@ def main():
         machine.reset()
 
 main()
+
