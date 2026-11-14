@@ -34,3 +34,5 @@ Possible future improvements:
 - Implement a visial play using LED, for example  
   
 main_w.py is for the Pi Pico with Wi-Fi onboard. Pins stay the same.  
+
+In the picture the butten is wrongly connected to GP16 and GP17 which has to be GP17 and Ground!
