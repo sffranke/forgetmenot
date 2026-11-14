@@ -31,5 +31,6 @@ The code is for the Pi Pico without built in WiFi, it needs some changes if you 
 Possible future improvements:
 - A Hiscore System, those who think of you more often will be rewarded by playing longer, for example.
 - Play a beep when ready
-- Implement a visial play using LED, for example
+- Implement a visial play using LED, for example  
   
+main_w.py is for the Pi Pico with Wi-Fi onboard. Pins stay the same.  
