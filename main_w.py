@@ -30,7 +30,7 @@ except ImportError:
 IRC_HOST = 'irc.oftc.net'
 IRC_PORT = 6667                  # Kompatibel mit vorhandenen Spieluhren
 IRC_CHANNEL = "#forgetmenot"
-IRC_CHANNEL_KEY = "geheim"    # Kanalpasswort, KEIN Authentifizierungsschluessel
+IRC_CHANNEL_KEY = ""    # Kanalpasswort, KEIN Authentifizierungsschluessel
 MOTOR_SPEED = 0.089            # unveraenderter Motor-Tastgrad
 MOTOR_TIME_MS = 20000
 WIFI_FILE = 'wifi.sec'
@@ -518,11 +518,10 @@ def form_data(body):
 
 
 class SetupPortal:
-    """Geschuetztes temporaeres WLAN-Portal zur Einrichtung."""
+    """Offenes temporaeres WLAN-Portal zur Einrichtung (ohne Passwort)."""
     def __init__(self):
         self.ap = network.WLAN(network.WLAN.IF_AP)
         self.server = None
-        self.ap_password = None
 
     @staticmethod
     def page(content):
@@ -572,14 +571,12 @@ small{color:#777}</style></head><body><main><h2>WLAN-Setup</h2><small>''' + DEVI
         return lines[0], body[:length]
 
     def setup(self):
-        ssid = 'vergissmeinnicht-' + DEVICE_NAME[-4:]
-        # Zufallskennwort nur auf der Thonny-Konsole anzeigen.
-        self.ap_password = hexstr(os.urandom(12))
+        ssid = 'vergissmeinnicht'
         try:
-            # RP2/MicroPython: security=3 bezeichnet WPA2-PSK.
-            # Bei nicht unterstuetztem Konfigurationsparameter KEIN
-            # Rueckfall auf ein offenes WLAN.
-            self.ap.config(ssid=ssid, security=3, key=self.ap_password)
+            # Einrichtungs-WLAN bewusst OFFEN: security=0, kein Passwort.
+            # Die Heim-WLAN-Zugangsdaten werden dabei unverschluesselt
+            # per HTTP uebertragen. Nur in vertrauenswuerdiger Umgebung nutzen.
+            self.ap.config(ssid=ssid, security=0)
             self.ap.active(True)
             ip = self.ap.ifconfig()[0]
             self.server = socket.socket()
@@ -591,8 +588,7 @@ small{color:#777}</style></head><body><main><h2>WLAN-Setup</h2><small>''' + DEVI
             print('Setup-AP konnte nicht gestartet werden:', type(err).__name__, err)
             self.close()
             return False
-        print('Setup-WLAN:', ssid)
-        print('Setup-WLAN-Passwort:', self.ap_password)
+        print('Setup-WLAN:', ssid, '(offen, ohne Passwort)')
         print('Browser: http://' + ip)
         return True
 
@@ -712,3 +708,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
